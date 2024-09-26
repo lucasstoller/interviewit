@@ -4,36 +4,36 @@ require 'json'
 require 'uri'
 require 'dotenv/load'
 
-# Função para fazer requisição HTTP e obter o conteúdo HTML
+# Function to make an HTTP request and retrieve the HTML content
 def fetch_html(url)
   uri = URI.parse(url)
   response = Net::HTTP.get_response(uri)
   Nokogiri::HTML(response.body)
 end
 
-# Função para extrair informações do HTML
+# Function to extract information from the HTML
 def extract_info_from_page(html, url)
   page_data = {}
   
-  # Exemplo: Extraindo o título da página
+  # Example: Extracting the page title
   title = html.css('title').text
   page_data[:title] = title unless title.empty?
 
-  # Exemplo: Extraindo todos os parágrafos
+  # Example: Extracting all paragraphs
   paragraphs = html.css('p').map(&:text)
   page_data[:paragraphs] = paragraphs unless paragraphs.empty?
 
-  # Incluir o URL da página nos dados
+  # Include the page URL in the data
   page_data[:url] = url
 
-  # Exemplo: Extraindo links internos
+  # Example: Extracting internal links
   internal_links = html.css('a').map { |link| link['href'] }.compact.select { |href| href.start_with?('/') }
   page_data[:links] = internal_links.empty? ? [] : internal_links
 
   page_data
 end
 
-# Função para seguir links internos e coletar informações
+# Function to follow internal links and collect information
 def scrape_site(base_url, paths = ['/'], progress_callback = nil)
   all_data = []
   total_pages = paths.size
@@ -43,70 +43,70 @@ def scrape_site(base_url, paths = ['/'], progress_callback = nil)
   paths.each do |path|
     current_page += 1
 
-    # Verificar se o caminho já é uma URL absoluta ou relativa
+    # Check if the path is already an absolute URL or a relative one
     url = if path.start_with?('http')
-            path  # Já é uma URL absoluta
+            path  # It is already an absolute URL
           else
-            URI.join(base_url, path).to_s  # URL relativa, então unir com base_url
+            URI.join(base_url, path).to_s  # Relative URL, so join with base_url
           end
 
     puts "Scraping URL: #{url}"
-    urls_used << url  # Guardando o URL para referência futura
+    urls_used << url  # Store the URL for future reference
 
     html = fetch_html(url)
-    page_data = extract_info_from_page(html, url) # Passar o URL para referência
+    page_data = extract_info_from_page(html, url) # Pass the URL for reference
 
     all_data << page_data
 
-    # Pegar novos links para seguir
+    # Retrieve new links to follow
     new_links = page_data[:links]
 
-    # Normalizando links relativos e absolutos corretamente
+    # Normalize relative and absolute links correctly
     next_paths = new_links.map do |link|
-      if link.start_with?('/') # Relativo
+      if link.start_with?('/') # Relative
         URI.join(base_url, link).to_s
       else
-        link # Já é absoluto
+        link # Already absolute
       end
     end.uniq
 
-    # Atualizar progresso
+    # Update progress
     progress_callback.call(current_page, total_pages) if progress_callback
 
-    # Recursivamente seguir links
+    # Recursively follow links
     all_data.concat(scrape_site(base_url, next_paths, progress_callback)) unless next_paths.empty?
   end
 
   return all_data, urls_used
 end
 
-# Função para exibir progresso
+# Function to show progress
 def show_progress(current, total)
   percent_complete = ((current.to_f / total.to_f) * 100).round(2)
-  puts "Progresso: #{percent_complete}% (#{current} de #{total} páginas processadas)"
+  puts "Progress: #{percent_complete}% (#{current} of #{total} pages processed)"
 end
 
-# Função para enviar dados coletados para o ChatGPT e gerar insights
+# Function to send collected data to ChatGPT and generate insights
 def generate_insights(data, urls_used)
-  puts "Enviando dados para o ChatGPT..."
+  puts "Sending data to ChatGPT..."
 
-  api_key = ENV['OPEN_AI_API_KEY'] # Coloque sua chave API aqui
+  api_key = ENV['OPEN_AI_API_KEY'] # Put your API key here
   uri = URI("https://api.openai.com/v1/chat/completions")
 
-  # Preparar os dados em formato JSON para enviar
-  prompt = "Aqui estão alguns dados extraídos de um site institucional: #{data.to_json}. Gere insights relevantes para uma entrevista, como valores, projetos recentes, cultura da empresa, e tópicos que posso discutir. As referências de cada análise estão nos respectivos URLs."
+  # Prepare the data in JSON format to send
+  prompt = "Here is some data extracted from an institutional site: #{data.to_json}. Generate relevant insights for an interview, such as values, recent projects, company culture, and topics I can discuss. The references for each analysis are linked to their respective URLs."
 
   request_body = {
     model: "gpt-4",
     messages: [
-      { role: "system", content: "Você é um assistente que ajuda a gerar insights a partir de informações extraídas de um site institucional." },
+      { role: "system", content: "You are an assistant helping to generate insights from information extracted from an institutional site." },
       { role: "user", content: prompt }
     ],
     max_tokens: 500,
     temperature: 0.7
   }.to_json
 
-  # Fazendo requisição POST para a API do ChatGPT
+  # Make a POST request to the ChatGPT API
   http = Net::HTTP.new(uri.host, uri.port)
   http.use_ssl = true
   request = Net::HTTP::Post.new(uri.path, {
@@ -116,32 +116,32 @@ def generate_insights(data, urls_used)
   request.body = request_body
   response = http.request(request)
 
-  # Pegando a resposta do ChatGPT
+  # Get the response from ChatGPT
   chatgpt_response = JSON.parse(response.body)["choices"][0]["message"]["content"]
   
-  # Salvando a resposta em um arquivo .txt
+  # Save the response in a .txt file
   File.open("chatgpt_insights.txt", "w") do |file|
     file.puts chatgpt_response
-    file.puts "\nReferências dos URLs utilizados:\n"
+    file.puts "\nReferences for URLs used:\n"
     urls_used.each do |url|
       file.puts url
     end
   end
 
-  puts "Insights gerados e salvos em 'chatgpt_insights.txt'"
+  puts "Insights generated and saved in 'chatgpt_insights.txt'"
 end
 
-# URL do site da empresa
-base_url = ENV['INSTITUTIONAL_COMPANY_BASE_URL'] # Coloque o URL da empresa aqui
+# URL of the company site
+base_url = ENV['INSTITUTIONAL_COMPANY_BASE_URL'] # Put the company's URL here
 
-puts "Iniciando o processo de scraping..."
+puts "Starting the scraping process..."
 
-# Coleta as informações do site com acompanhamento do progresso
+# Collect the site's information with progress tracking
 site_data, urls_used = scrape_site(base_url, ['/'], method(:show_progress))
 
-puts "Scraping concluído. Gerando insights com o ChatGPT..."
+puts "Scraping completed. Generating insights with ChatGPT..."
 
-# Gera insights usando o ChatGPT e salva no arquivo, incluindo URLs usados
+# Generate insights using ChatGPT and save to the file, including URLs used
 generate_insights(site_data, urls_used)
 
-puts "Processo concluído!"
+puts "Process completed!"
