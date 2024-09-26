@@ -10,4 +10,7 @@ gem "json", "~> 2.7"
 
 gem "net-http", "~> 0.4.1"
 
-gem "dotenv", "~> 2.8", groups: [:development, :test]
+group :development, :test do
+  gem "dotenv", "~> 2.8"
+  gem "byebug", "~> 11.1"
+end
