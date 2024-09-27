@@ -3,3 +3,4 @@ Gemfile.lock
 chatgpt_insights.txt
 .byebug_history
 /logs
+/data

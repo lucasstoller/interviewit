@@ -9,12 +9,12 @@ class Application
     @logger.info("Starting the scraping process...")
 
     # Collect the site's information with progress tracking
-    site_data, urls_used = @scraper.scrape(['/'], method(:show_progress))
+    site_data = @scraper.scrape
 
     @logger.info("Scraping completed. Generating insights with ChatGPT...")
 
     # Generate insights using ChatGPT and save to the file, including URLs used
-    @analysis_generator.generate_insights(site_data, urls_used)
+    @analysis_generator.generate_insights(site_data, @scraper.urls_used)
 
     @logger.info("Process completed!")
   end

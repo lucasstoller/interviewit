@@ -3,52 +3,67 @@ require 'nokogiri'
 require 'uri'
 
 class Scraper
-  attr_reader :base_url, :logger
+  attr_reader :base_url, :logger, :urls_used, :execution_duration
+
+  URLS_LIMIT = ENV['URLS_LIMIT'] || 5
 
   def initialize(base_url, logger)
     @base_url = base_url
     @logger = logger
+    @urls_used = []
   end
 
   # Public method to start the scraping process
-  def scrape(paths = ['/'], progress_callback = nil)
-    all_data = []
-    total_pages = paths.size
-    current_page = 0
-    urls_used = []
-
-    paths.each do |path|
-      current_page += 1
-
-      url = build_url(path)
-      logger.info("Scraping URL: #{url}")
-      urls_used << url
-
-      html = fetch_html(url)
-      next if html.nil?
-
-      page_data = extract_info_from_page(html, url)
-      all_data << page_data
-
-      new_links = page_data[:links]
-      next_paths = normalize_links(new_links)
-      progress_callback.call(current_page, total_pages) if progress_callback
-
-      all_data.concat(scrape(next_paths, progress_callback)) unless next_paths.empty?
+  def scrape(urls = [@base_url], start_time = Time.now)
+    if urls.empty? || @urls_used.size == URLS_LIMIT
+      @execution_duration = Time.now - start_time
+      return []
     end
 
-    return all_data, urls_used
+    first_url, *other_urls = urls
+
+    logger.info("Scraping URL: #{first_url}")
+    @urls_used << first_url
+
+    html = fetch_html(first_url)
+    return scrape(other_urls, start_time) unless html
+
+    page_data = extract_info_from_page(html, first_url)
+    other_urls = merge_new_urls(other_urls, page_data[:links])
+
+    log_progress(other_urls)
+
+    [page_data].concat(scrape(other_urls, start_time))  # Recursively scrape new URLs
   end
 
   private
+
+  def log_progress(other_urls)
+    total_url_size = @urls_used.size + other_urls.size
+    percent_complete = @urls_used.size.to_f / total_url_size * 100
+    @logger.info("Scraped #{@urls_used.size}/#{total_url_size} - #{percent_complete}%")
+  end
+
+  def merge_new_urls(urls, new_urls = [])
+    merged_urls = (urls + new_urls).uniq
+
+    @logger.info("#{merged_urls.size - urls.size} urls added into the stack")
+
+    merged_urls
+  end
 
   # Function to make an HTTP request and retrieve the HTML content
   def fetch_html(url)
     logger.debug("Fetching HTML for URL: #{url}")
     uri = URI.parse(url)
     response = Net::HTTP.get_response(uri)
-    logger.debug("Response status: #{response.code}")
-    Nokogiri::HTML(response.body)
+
+    if response.is_a?(Net::HTTPSuccess)
+      Nokogiri::HTML(response.body)
+    else
+      logger.error("Failed to fetch HTML for URL #{url}: HTTP #{response.code}")
+      nil
+    end
   rescue => e
     logger.error("Failed to fetch HTML for URL #{url}: #{e.message}")
     nil
@@ -73,8 +88,10 @@ class Scraper
     page_data[:url] = url
 
     # Extracting internal links
-    internal_links = html.css('a').map { |link| link['href'] }.compact.select { |href| href.start_with?('/') }
-    page_data[:links] = internal_links.empty? ? [] : internal_links
+    internal_links = html.css('a').map { |link| normalize_link(link['href']) }.compact.select do |href|
+      href.match?(%r{^(/|#{@base_url})([^#]*)$}) && href != @base_url && href != "#{@base_url}/"
+    end.uniq
+    page_data[:links] = internal_links
     logger.debug("Links extracted: #{internal_links.count}")
 
     page_data
@@ -83,23 +100,14 @@ class Scraper
     {}
   end
 
-  # Function to normalize relative and absolute links correctly
-  def normalize_links(new_links)
-    new_links.map do |link|
-      if link.start_with?('/') # Relative
-        URI.join(base_url, link).to_s
-      else
-        link # Already absolute
-      end
-    end.uniq
-  end
-
   # Function to build absolute URL from the base URL and path
-  def build_url(path)
-    if path.start_with?('http')
-      path  # It is already an absolute URL
+  def normalize_link(link)
+    return if link.nil?
+
+    if link.start_with?('http')
+      link  # It is already an absolute URL
     else
-      URI.join(@base_url, path).to_s  # Relative URL, so join with base_url
+      URI.join(@base_url, link).to_s  # Relative URL, so join with base_url
     end
   end
 end

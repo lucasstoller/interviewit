@@ -26,16 +26,14 @@ class AnalysisGenerator
     uri = URI("https://api.openai.com/v1/chat/completions")
 
     # Prepare the data in JSON format to send
-    prompt = "Here is some data extracted from an institutional site: #{data.to_json}. Generate relevant insights for an interview, such as values, recent projects, company culture, and topics I can discuss. The references for each analysis are linked to their respective URLs."
+    prompt = "Here is some data extracted from an institutional site: #{data.to_json}. Generate relevant insights for an interview, such as the company products, values, recent projects, company culture, topics I can discuss and questions to be made (to demostrate interest). The references for each analysis are linked to their respective URLs."
 
     request_body = {
-      model: "gpt-4",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: "You are an assistant helping to generate insights from information extracted from an institutional site." },
         { role: "user", content: prompt }
-      ],
-      max_tokens: 500,
-      temperature: 0.7
+      ]
     }.to_json
 
     # Make a POST request to the ChatGPT API
@@ -47,6 +45,10 @@ class AnalysisGenerator
     })
     request.body = request_body
     response = http.request(request)
+
+    unless response.is_a?(Net::HTTPSuccess)
+        raise Exception.new(status: response.code, message: response.body)
+    end
 
     logger.debug("ChatGPT API response status: #{response.code}")
     response
