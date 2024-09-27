@@ -39,26 +39,13 @@ URLS_LIMIT=10
 
 ### Initialize the Scraper
 
-To begin scraping and generating a report, simply initialize the `Scraper` class with the necessary parameters.
+To begin generating the analyses simply run the following command:
 
-```ruby
-require 'logger'
-require './scraper'
-
-# Initialize the logger
-logger = Logger.new(STDOUT)
-
-# Initialize the Scraper
-scraper = Scraper.new(ENV['INSTITUTIONAL_COMPANY_BASE_URL'], logger)
+```bash
+INSTITUTIONAL_COMPANY_BASE_URL=<site> ruby main.rb
 ```
 
 ### Generate Company Analysis
-
-Once you've initialized the scraper, you can start the process by calling the `scrape` method:
-
-```ruby
-scraper.scrape(['/'])
-```
 
 The app will fetch data from the company website, process it with AI, and generate an analysis saved in the `data` folder.
 
